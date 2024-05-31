@@ -1,57 +1,83 @@
-let {Document} = require('docxyz');
-let fileName = 'variant03.docx';
-let document = new Document(fileName);
+import docx
+import bitstring
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt
+from MTK2 import *
 
-const RGBCheck = ({ r, g, b }) => {
-    return Boolean(r && g && b)
-}
+def get_or_add_spacing(rPr):
+    spacings = rPr.xpath("./w:spacing")
+    if spacings:
+        return spacings[0]
+    spacing = OxmlElement("w:spacing")
+    rPr.insert_element_before(
+        spacing,
+        *(
+            "w:w",
+            "w:kern",
+            "w:position",
+            "w:sz",
+            "w:szCs",
+            "w:highlight",
+            "w:u",
+            "w:effect",
+            "w:bdr",
+            "w:shd",
+            "w:fitText",
+            "w:vertAlign",
+            "w:rtl",
+            "w:cs",
+            "w:em",
+            "w:lang",
+            "w:eastAsianLayout",
+            "w:specVanish",
+            "w:oMath",
+        ),
+    )
+    return spacing
 
+def run_set_spacing(run, value: int):
+    rPr = run._r.get_or_add_rPr()
+    spacing = get_or_add_spacing(rPr)
+    spacing.set(qn('w:val'), str(value))
 
-let kod = '';
-let shifrText = [];
-for(let paragraph of document.paragraphs){
-    for(let run of paragraph.runs) {
-        const fontColor = RGBCheck(run.font.color.rgb);
-        const fontSize = run.font.size.pt
-        const fontHighlightColor = run.font.highlight_color
-        const fontScale = run._r.get_or_add_rPr().xpath("./w:w")[0]
-        const fontSpacing = run._r.get_or_add_rPr().xpath("./w:spacing")[0]
-        if(
-            fontColor ||
-            (fontSize !== 12) ||
-            (fontHighlightColor !== 8) ||
-            fontScale ||    
-            fontSpacing
-            ) {
-            shifrText.push(run.text);
-            run.underline = true;
-            for(let i = 0; i < run.text.length; i++) {
-                kod += '1'
-            }
-        }
-        else {
-            for(let i = 0; i < run.text.length; i++) {
-                kod += '0'
-            }
-        }
-    }
-}
-// kod += '000'
-console.log('<------------------------------------------------------------->')
-console.log(kod)
-console.log(kod.length)
-console.log('<------------------------------------------------------------->')
-console.log(shifrText)
-const byteCharacters = kod.match(/.{1,8}/g)
-console.log('<------------------------------------------------------------->')
-console.log(byteCharacters)
-const byteNumbers = byteCharacters.map(byte => parseInt(byte, 2))
-console.log('<------------------------------------------------------------->')
-console.log(byteNumbers)
+doc2 = docx.Document()
+style = doc2.styles['Normal']
+style.font.name = 'Times New Roman'
+style.font.size = Pt(14)
+doc1 = docx.Document('variant04.docx')
 
-const byteArray = new Uint8Array(byteNumbers)
-const decodercp866 = new TextDecoder('cp866')
-console.log('cp866 --- |', decodercp866.decode(byteArray), '|')
-console.log('<------------------------------------------------------------->')
+for i in doc1.paragraphs:
+    doc2.add_paragraph()
 
-document.save(fileName)
+for p in range(len(doc1.paragraphs)):
+    for t in doc1.paragraphs[p].text:
+        doc2.paragraphs[p].add_run(t)
+
+print("Введите цитату для сокрытия:")
+str_code = str(input())
+str_byte = format(MTK2_code(str_code))
+index = 0
+
+for paragraph in doc2.paragraphs:
+    for run in paragraph.runs:
+        if str_byte[index] == '1':
+            run_set_spacing(run, 2)
+        if index < len(str_byte)-1:
+            index += 1
+
+path = "file_secret.docx"
+doc2.save(path)
+print()
+print(str_code, "---> MTK2 encode:")
+print(str_byte)
+decode = format(MTK2_decode(str_byte))
+print("Докедоривание:", decode)
+print("\nСодержимое файла:")
+print("-" * 100)
+
+for paragraph in doc2.paragraphs:
+    print(paragraph.text)
+
+print("-" * 100)
+print("\nФайл", path, "сохранен")
